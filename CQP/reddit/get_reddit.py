@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import json, sys, re, os, io, time, requests
-import praw
+# import praw
 # import pandas as pd
 import datetime as dt
-from praw import Reddit
+# from praw import Reddit
 import csv, tempfile, random
 from glob import glob
 from langdetect import detect, DetectorFactory
@@ -132,10 +132,8 @@ max_tokens_per_slice = 255000
 max_spaces_per_slice = 0.85*max_tokens_per_slice
 
 add_meta_tag = True # Wrap with <meta...
-# months = [str(i+1) for i in range(12)]
-# years = ['2019', '2020']
-years = ['2018']
-months = ['7', '8', '9', '10', '11', '12']
+months = [str(i+1) for i in range(12)]
+years = ['2018', '2019', '2020']
 
 list_subreddits = get_subreddits('listofsubreddits.html')
 out_dir = 'out'
@@ -143,6 +141,8 @@ out_dir = 'out'
 for year in years:
     for month in months:
         if year == '2020' and int(month) > 9:
+            continue
+        elif year == '2018' and int(month) <= 6:
             continue
         file_dir = out_dir + os.sep + f'RC_{year}_{month}.sgml'
         # if f'{year}-{month}' != '2019-3':
@@ -170,7 +170,7 @@ for year in years:
         # columns = ['subreddit', 'distinguished', 'subreddit_type', 'subreddit_id', 'stickied', 'gilded', 'author',
         #            'author_flair_text', 'created_utc', 'parent_id', 'score', 'controversiality', 'is_submitter',
         #            'author_cakeday', 'author_flair_css_class', 'link_id', 'retrieved_on', 'id', 'can_gild', 'edited']
-        columns = ['author', 'author_flair_css', 'author_flair_text', 'controversiality', 'created_utc',
+        columns = ['id', 'author', 'author_flair_css', 'author_flair_text', 'controversiality', 'created_utc',
                    'distinguished', 'edited', 'gilded', 'link_id', 'parent_id', 'retrieved_on', 'score',
                    'stickied', 'subreddit', 'subreddit_id', 'ups']
 

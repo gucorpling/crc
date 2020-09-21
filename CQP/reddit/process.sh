@@ -1,13 +1,13 @@
 # > out/RC_*.sgml
-mkdir out
 python get_reddit.py
 
+# generate metadata
+python gen_meta.py
+
 # out/RC_*.sgml > processed_reddit/RC_*.sgml
-mkdir processed_reddit
 python postprocess.py
 
 # processed_reddit/RC_*.sgml > final_reddit/RC_*_ss.sgml
-mkdir final_reddit
 INFILE_DIR="processed_reddit"
 for FILE in $INFILE_DIR/*.sgml;
 do

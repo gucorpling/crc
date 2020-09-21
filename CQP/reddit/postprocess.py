@@ -56,13 +56,13 @@ nlp = stanza.Pipeline('en', processors='tokenize')
 
 file_dir = 'out'
 out_dir = 'processed_reddit'
-# if not os.path.exists(out_dir):
-#     os.mkdir(out_dir)
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
 for filename in os.listdir(file_dir):
     # if filename != 'RC_2019_4.sgml':
     #     continue
-    # if os.path.isfile(out_dir+os.sep+filename):
-    #     continue
+    if os.path.isfile(out_dir+os.sep+filename):
+        continue
     print(filename)
     start_time = time.time()
     with io.open(file_dir+os.sep+filename, encoding='utf-8') as f:

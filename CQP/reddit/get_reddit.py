@@ -17,10 +17,11 @@ PY3 = sys.version_info[0] == 3
 def get_subreddits(file):
     html = io.open(file, encoding='utf-8').read()
     res = re.findall(r'<a href="[\w\W]+?" rel="nofollow">/r/(\w+?)</a><br>', html)
-    return res
+    cleaned = [x for x in res if 'Porn' not in x or 'porn' not in x]
+    return cleaned
 
 
-def get_pushshift_data(sub=None, before=None, after=None, ids=None, getSubmissions=True, getComments=False, limit=1000):
+def get_pushshift_data(sub=None, before=None, after=None, ids=None, getSubmissions=True, getComments=False, limit=500):
     suffix = ''
     searchType = 'submission'
     if getComments or not getSubmissions:
@@ -30,11 +31,11 @@ def get_pushshift_data(sub=None, before=None, after=None, ids=None, getSubmissio
     if after is not None:
         suffix += '&after=' + str(after)
     if sub is not None:
-        suffix += '&subreddit=' + sub
+        suffix += '&subreddit!=Porn'
     if ids is not None:
         suffix += '&ids=' + ','.join(ids)
 
-    url = 'https://api.pushshift.io/reddit/search/'+searchType+'?sort=desc&size='+str(limit)+suffix
+    url = f'https://api.pushshift.io/reddit/{searchType}/search/'+'?size='+str(limit)+suffix
     print('loading '+url)
     r = requests.get(url)
     try:
@@ -63,10 +64,10 @@ def make_para(text):
     text = "<p>" + text + "</p>"
     text = text.replace("<p></p>","").strip()
     # Handle bullets
-    text = re.sub(r'<p>(\s*)\*([^\n]*?[^*\n]\s*)</p>',r'\1<item>\2</item>',text)
-    text = re.sub(r'((\s*<item>.*?</item>\s*\n?)+)',r'\n<list type="unordered">\1\n</list>',text)
+    # text = re.sub(r'<p>(\s*)\*([^\n]*?[^*\n]\s*)</p>',r'\1<item>\2</item>',text)
+    # text = re.sub(r'((\s*<item>.*?</item>\s*\n?)+)',r'\n<list type="unordered">\1\n</list>',text)
     # Hyperlinks
-    text = re.sub(r'\[(.*?)\]\((.*?)\)',r'<ref target="\2">\1</ref>',text)
+    text = re.sub(r'\[(.*?)\]\((.*?)\)',r'',text)
 
     text = re.sub(r'\n+</p>', r'</p>', text)
 
@@ -88,12 +89,16 @@ def flattenjson(b, delim):
     return val
 
 
-def search_comments(comments, columns, year, month, decade, spaces_so_far):
+def search_comments(comments, columns, year, month, decade, spaces_so_far, seen_id):
     spaces = 0
     this_post = ''
     for comment in comments:
+        if comment['id'] in seen_id:
+            continue
+        seen_id.append(comment['id'])
         cur_post = '<text'
         body = comment['body']
+        body = re.sub('''[^&…;äé0-9a-zA-Z ="'_<>\n\t,./$:?@!\[\]+#\|()*%`-~\\-\^-]''', '', body)
         lang = ''
         try:
             lang = detect(body)
@@ -109,8 +114,11 @@ def search_comments(comments, columns, year, month, decade, spaces_so_far):
                         cur_post += f' {col}=""'
                     else:
                         field = comment[col]
+                        if field and isinstance(field, str):
+                            field = field.replace('"', '')
                         cur_post += f' {col}="{field}"'
                 cur_post += f' year="{year}" month="{month}" decade="{decade}">\n'
+                cur_post = re.sub('''[^&…;äé0-9a-zA-Z ="'_<>\n\t,./$:?@!\[\]+#\|()*%`-~\\-\^-]''', '', cur_post)
                 text = make_para(body)
 
                 cur_post += text + '\n</text>'
@@ -136,26 +144,27 @@ months = [str(i+1) for i in range(12)]
 years = ['2018', '2019', '2020']
 
 list_subreddits = get_subreddits('listofsubreddits.html')
-out_dir = 'out'
+out_dir = 'data' + os.sep + 'out'
 
 for year in years:
     for month in months:
-        if year == '2020' and int(month) > 9:
+        if year == '2020' and int(month) > 11:
             continue
         elif year == '2018' and int(month) <= 6:
             continue
         file_dir = out_dir + os.sep + f'RC_{year}_{month}.sgml'
-        # if f'{year}-{month}' != '2019-3':
+        # if f'{year}-{month}' != '2019-8':
         #     continue
         print(f'{year}-{month}')
 
-        if os.path.exists(file_dir):
-            continue
+        # if os.path.exists(file_dir):
+        #     continue
         out_file = io.open(file_dir, 'w', encoding='utf-8')
 
         decade = "2010" if year.startswith("201") else "2020"
         spaces_so_far = 0
         this_post = ''
+        seen_id = []
         sub_list = []
         start_epoch = int(dt.datetime(int(year), int(month), 1).timestamp())
         if month == '12':
@@ -170,16 +179,17 @@ for year in years:
         # columns = ['subreddit', 'distinguished', 'subreddit_type', 'subreddit_id', 'stickied', 'gilded', 'author',
         #            'author_flair_text', 'created_utc', 'parent_id', 'score', 'controversiality', 'is_submitter',
         #            'author_cakeday', 'author_flair_css_class', 'link_id', 'retrieved_on', 'id', 'can_gild', 'edited']
-        columns = ['id', 'author', 'author_flair_css', 'author_flair_text', 'controversiality', 'created_utc',
+        columns = ['id', 'author', 'author_flair_css_class', 'author_flair_text', 'controversiality', 'created_utc',
                    'distinguished', 'edited', 'gilded', 'link_id', 'parent_id', 'retrieved_on', 'score',
                    'stickied', 'subreddit', 'subreddit_id', 'ups']
 
         print(f'Start searching comments from {year}-{month}...')
         start_time = time.time()
-        # get 1000 comments
-        (comments_tmp, prev_end_date) = get_pushshift_data(sub=sub, before=end_epoch, after=start_epoch, getComments=True, limit=1000)
+        # get 500 comments
+        (comments_tmp, prev_end_date) = get_pushshift_data(sub=sub, before=start_epoch+100, after=start_epoch, getComments=True, limit=500)
         comments = comments_tmp['data']
-        cur_spaces, cur_post = search_comments(comments, columns, year, month, decade, spaces_so_far)
+        cur_spaces, cur_post = search_comments(comments, columns, year, month, decade, spaces_so_far, seen_id)
+
         spaces_so_far += cur_spaces
         this_post += cur_post
         out_file.write(cur_post)
@@ -188,38 +198,19 @@ for year in years:
         while prev_end_date is not None:
             if spaces_so_far > max_spaces_per_slice:
                 break
-            (comments_tmp, prev_end_date) = get_pushshift_data(sub=sub, before=end_epoch, after=prev_end_date-1, getComments=True, limit=1000)
+            (comments_tmp, prev_end_date) = get_pushshift_data(sub=sub, before=end_epoch, after=prev_end_date-1, getComments=True, limit=500)
             if prev_end_date is not None:
                 # submissions.extend(submissions_tmp['data'])
                 comments = comments_tmp['data']
-                cur_spaces, cur_post = search_comments(comments, columns, year, month, decade, spaces_so_far)
+                cur_spaces, cur_post = search_comments(comments, columns, year, month, decade, spaces_so_far, seen_id)
+                if cur_spaces == 0:
+                    # sub = ','.join(random.choices([x for x in list_subreddits if x not in sub_list], k=30))
+                    # prev_end_date = start_epoch
+                    break
                 spaces_so_far += cur_spaces
                 this_post += cur_post
                 out_file.write(cur_post)
 
-        while spaces_so_far < max_spaces_per_slice:
-            sub = ','.join(random.choices([x for x in list_subreddits if x not in sub_list], k=30))
-            sub_list += sub
-            (comments_tmp, new_prev_end_date) = get_pushshift_data(sub=sub, before=end_epoch, after=start_epoch,
-                                                               getComments=True, limit=1000)
-            comments = comments_tmp['data']
-            cur_spaces, cur_post = search_comments(comments, columns, year, month, decade, spaces_so_far)
-            spaces_so_far += cur_spaces
-            this_post += cur_post
-            out_file.write(cur_post)
-
-            while new_prev_end_date is not None:
-                if spaces_so_far > max_spaces_per_slice:
-                    break
-                (comments_tmp, new_prev_end_data) = get_pushshift_data(sub=sub, before=end_epoch, after=new_prev_end_date - 1,
-                                                                   getComments=True, limit=1000)
-                if new_prev_end_data is not None:
-                    # submissions.extend(submissions_tmp['data'])
-                    comments = comments_tmp['data']
-                    cur_spaces, this_post = search_comments(comments, columns, year, month, decade, spaces_so_far)
-                    spaces_so_far += cur_spaces
-                    this_post += cur_post
-                    out_file.write(cur_post)
         end_time = time.time()
         print(f'Time cost: {int(end_time - start_time)}s')
 

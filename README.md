@@ -11,3 +11,7 @@ Corpus Resource Coordinator work
 	3. Download [TreeTagger](https://www.cis.uni-muenchen.de/~schmid/tools/TreeTagger/) in ./CQP/reddit/ttagger
 	4. `pip install requirements.txt `
 	5. run `process.sh`
+
+### CQP sotu 2018 to 2020
+- Rebuild the corpus
+	1. run `sotu.py`
